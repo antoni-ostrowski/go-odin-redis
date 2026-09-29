@@ -1,0 +1,6 @@
+[tools]
+go = "1.27.0"
+
+[tasks.go-dev]
+dir = "{{config_root}}/go"
+run = "go run ./cmd"
