@@ -49,14 +49,22 @@ func handleConn(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 	for {
-		res, err := parse(reader, conn)
+		args, err := parse(reader, conn)
 		if err != nil {
+			if err == io.EOF {
+				return
+			}
 			slog.Error("err", "err", err)
-			conn.Write([]byte("+err\r\n"))
+			fmt.Fprintf(conn, "-ERR %s\r\n", err.Error())
 		}
-		fmt.Printf("val: |%v|\n", res)
-		conn.Write([]byte("+OK\r\n"))
-
+		f, ok := handlers[args[0]]
+		if !ok {
+			fmt.Fprintf(conn, "-ERR %s\r\n", "command not found")
+			return
+		}
+		fmt.Printf("val: |%v|\n", args)
+		f(args, conn)
+		// fmt.Fprintf(conn, "+OK\r\n")
 	}
 }
 
@@ -71,7 +79,7 @@ func parse(reader *bufio.Reader, conn net.Conn) ([]string, error) {
 		// parse every item of arr, if they bulks the switch statement will handle them
 		// and we accumulate results in arr
 		l := readInt(reader)
-		cmds := make([]string, 0, l)
+		cmds := make([]string, 0, max(l, 2048))
 		for range l {
 			cmdParts, err := parse(reader, conn)
 			if err != nil {
@@ -98,7 +106,7 @@ func parse(reader *bufio.Reader, conn net.Conn) ([]string, error) {
 func readInt(reader *bufio.Reader) int64 {
 	i, _ := reader.ReadString('\n')
 	i = i[:len(i)-2]
-	l, _ := strconv.ParseInt(string(i), 0, 64)
+	l, _ := strconv.ParseInt(string(i), 10, 64)
 	if l <= 0 {
 		return 0
 	}
